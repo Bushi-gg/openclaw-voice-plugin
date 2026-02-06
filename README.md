@@ -1,139 +1,64 @@
-# @openclaw/voice-call
+# OpenClaw Voice Plugin (SAGE Fork)
 
-Official Voice Call plugin for **OpenClaw**.
+Custom fork of the OpenClaw voice-call plugin with Groq Whisper STT integration.
 
-Providers:
+## Features
 
-- **Twilio** (Programmable Voice + Media Streams)
-- **Telnyx** (Call Control v2)
-- **Plivo** (Voice API + XML transfer + GetInput speech)
-- **Mock** (dev/no network)
+- **Twilio Voice Calls** - Inbound/outbound phone calls
+- **Groq Whisper STT** - Fast, cheap speech-to-text via Groq API
+- **ElevenLabs TTS** - High-quality text-to-speech
+- **VAD (Voice Activity Detection)** - Natural speech boundary detection
+- **Tailscale Funnel** - Secure webhook exposure
 
-Docs: `https://docs.openclaw.ai/plugins/voice-call`
-Plugin system: `https://docs.openclaw.ai/plugin`
+## Configuration
 
-## Install (local dev)
-
-### Option A: install via OpenClaw (recommended)
-
-```bash
-openclaw plugins install @openclaw/voice-call
-```
-
-Restart the Gateway afterwards.
-
-### Option B: copy into your global extensions folder (dev)
-
-```bash
-mkdir -p ~/.openclaw/extensions
-cp -R extensions/voice-call ~/.openclaw/extensions/voice-call
-cd ~/.openclaw/extensions/voice-call && pnpm install
-```
-
-## Config
-
-Put under `plugins.entries.voice-call.config`:
-
-```json5
+```json
 {
-  provider: "twilio", // or "telnyx" | "plivo" | "mock"
-  fromNumber: "+15550001234",
-  toNumber: "+15550005678",
-
-  twilio: {
-    accountSid: "ACxxxxxxxx",
-    authToken: "your_token",
-  },
-
-  plivo: {
-    authId: "MAxxxxxxxxxxxxxxxxxxxx",
-    authToken: "your_token",
-  },
-
-  // Webhook server
-  serve: {
-    port: 3334,
-    path: "/voice/webhook",
-  },
-
-  // Public exposure (pick one):
-  // publicUrl: "https://example.ngrok.app/voice/webhook",
-  // tunnel: { provider: "ngrok" },
-  // tailscale: { mode: "funnel", path: "/voice/webhook" }
-
-  outbound: {
-    defaultMode: "notify", // or "conversation"
-  },
-
-  streaming: {
-    enabled: true,
-    streamPath: "/voice/stream",
-  },
+  "plugins": {
+    "entries": {
+      "voice-call": {
+        "enabled": true,
+        "config": {
+          "provider": "twilio",
+          "stt": {
+            "provider": "groq",
+            "model": "whisper-large-v3-turbo"
+          },
+          "tts": {
+            "provider": "elevenlabs"
+          },
+          "twilio": {
+            "accountSid": "AC...",
+            "authToken": "..."
+          }
+        }
+      }
+    }
+  }
 }
 ```
 
-Notes:
+## Groq STT Provider
 
-- Twilio/Telnyx/Plivo require a **publicly reachable** webhook URL.
-- `mock` is a local dev provider (no network calls).
-- `tunnel.allowNgrokFreeTierLoopbackBypass: true` allows Twilio webhooks with invalid signatures **only** when `tunnel.provider="ngrok"` and `serve.bind` is loopback (ngrok local agent). Use for local dev only.
+The Groq STT provider (`src/providers/stt-groq.ts`) implements:
 
-## TTS for calls
+- **mu-law decoding** - Converts Twilio's mu-law audio to PCM
+- **VAD** - RMS energy-based voice activity detection
+- **Silence detection** - Configurable silence threshold (default 800ms)
+- **Batch transcription** - Sends accumulated audio on silence
 
-Voice Call uses the core `messages.tts` configuration (OpenAI or ElevenLabs) for
-streaming speech on calls. You can override it under the plugin config with the
-same shape — overrides deep-merge with `messages.tts`.
+### Configuration Options
 
-```json5
-{
-  tts: {
-    provider: "openai",
-    openai: {
-      voice: "alloy",
-    },
-  },
-}
-```
+| Option | Default | Description |
+|--------|---------|-------------|
+| `model` | `whisper-large-v3-turbo` | Groq Whisper model |
+| `silenceDurationMs` | `800` | Silence duration to trigger transcription |
+| `vadThreshold` | `0.01` | RMS energy threshold for speech detection |
 
-Notes:
+## Upstream
 
-- Edge TTS is ignored for voice calls (telephony audio needs PCM; Edge output is unreliable).
-- Core TTS is used when Twilio media streaming is enabled; otherwise calls fall back to provider native voices.
+Forked from: `@openclaw/voice-call` v2026.2.1
 
-## CLI
+## License
 
-```bash
-openclaw voicecall call --to "+15555550123" --message "Hello from OpenClaw"
-openclaw voicecall continue --call-id <id> --message "Any questions?"
-openclaw voicecall speak --call-id <id> --message "One moment"
-openclaw voicecall end --call-id <id>
-openclaw voicecall status --call-id <id>
-openclaw voicecall tail
-openclaw voicecall expose --mode funnel
-```
-
-## Tool
-
-Tool name: `voice_call`
-
-Actions:
-
-- `initiate_call` (message, to?, mode?)
-- `continue_call` (callId, message)
-- `speak_to_user` (callId, message)
-- `end_call` (callId)
-- `get_status` (callId)
-
-## Gateway RPC
-
-- `voicecall.initiate` (to?, message, mode?)
-- `voicecall.continue` (callId, message)
-- `voicecall.speak` (callId, message)
-- `voicecall.end` (callId)
-- `voicecall.status` (callId)
-
-## Notes
-
-- Uses webhook signature verification for Twilio/Telnyx/Plivo.
-- `responseModel` / `responseSystemPrompt` control AI auto-responses.
-- Media streaming requires `ws` and OpenAI Realtime API key.
+MIT
